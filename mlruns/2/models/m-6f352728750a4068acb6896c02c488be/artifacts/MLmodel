@@ -1,0 +1,22 @@
+artifact_path: file:///C:/Mostafa/Leopard detection project/Code/GMM/mlruns/2/models/m-6f352728750a4068acb6896c02c488be/artifacts
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.pkl
+    predict_fn: predict
+    python_version: 3.11.9
+  sklearn:
+    code: null
+    pickled_model: model.pkl
+    serialization_format: cloudpickle
+    sklearn_version: 1.7.2
+mlflow_version: 3.7.0
+model_id: m-6f352728750a4068acb6896c02c488be
+model_size_bytes: 22007437
+model_uuid: m-6f352728750a4068acb6896c02c488be
+prompts: null
+run_id: 1674c545a0484d44b8e5eb73fe0c43af
+utc_time_created: '2025-12-13 15:44:37.490146'
