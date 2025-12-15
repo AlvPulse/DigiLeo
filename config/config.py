@@ -19,9 +19,9 @@ class ExperimentConfig:
         'class1': './EvalDatasets/AudioDD'
     })
 
-    max_raw_samples: int = 3000     # Limit per class per source (or total, depending on logic)
+    max_raw_samples: int = 1000     # Limit per class per source (or total, depending on logic)
     min_audio_len: int = 16000      # Drop raw files shorter than this (samples)
-    test_size: float = 0.2
+    test_size: float = 0.1
     
     # --- 2. SHAPING STRATEGIES ---
     window_samples: int = 8000      # 1.0 Second (at 16k, wait 8000 is 0.5s) -> Default was 8000
@@ -34,7 +34,7 @@ class ExperimentConfig:
     
     # How to handle files < window_samples?
     # Options: 'loop_pad' (repeat sound), 'zero_pad' (silence), 'drop' (ignore)
-    short_file_strategy: str = "loop_pad"
+    short_file_strategy: str = "drop"
     
     # --- 3. AUGMENTATION & BALANCING ---
     # These only apply to the TRAINING set after splitting

@@ -75,7 +75,7 @@ def process_file(filepath, label, scaler, model, config, vote_threshold=0.3, ove
         # Create chunks first
         for i in range(0, len(y) - win_len + 1, step):
             chunks.append(y[i : i + win_len])
-            
+        #print(len(chunks))
         if not chunks:
             return None, None # File too short
             
@@ -99,7 +99,7 @@ def process_file(filepath, label, scaler, model, config, vote_threshold=0.3, ove
         # Final Decision
         final_pred = 1 if event_ratio >= vote_threshold else 0
         
-        return final_pred, event_ratio
+        return final_pred, event_ratio,chunk_preds
 
     except Exception as e:
         print(f"❌ Error processing {filepath}: {e}")
@@ -131,19 +131,24 @@ def run_benchmark(run_id=None):
     
     # Process Class 0
     for f in files_0:
-        pred, ratio = process_file(f, 0, scaler, model, config)
+        pred, ratio,chunk_preds = process_file(f, 0, scaler, model, config)
         if pred is not None:
-            y_true.append(0)
-            y_pred.append(pred)
-            ratios.append(ratio)
             
+            # y_true.append(0)
+            # y_pred.append(pred)
+            # ratios.append(ratio)
+            y_true.append([0]* len(chunk_preds))
+            y_pred.append(chunk_preds)
+    
     # Process Class 1
     for f in files_1:
-        pred, ratio = process_file(f, 1, scaler, model, config)
+        pred, ratio,chunk_preds = process_file(f, 1, scaler, model, config)
         if pred is not None:
-            y_true.append(1)
-            y_pred.append(pred)
-            ratios.append(ratio)
+            # y_true.append(1)
+            # y_pred.append(pred)
+            # ratios.append(ratio)
+            y_true.append([1]* len(chunk_preds))
+            y_pred.append(chunk_preds)
             
     if not y_true:
         print("❌ No valid files processed. Aborting.")
@@ -188,5 +193,5 @@ def run_benchmark(run_id=None):
 if __name__ == "__main__":
     # You can pass a specific run_id string here, e.g., "a1b2c3..."
     # Or leave None to test the latest model
-    run_benchmark("44b5ee424f2b4e16b5d2ff3d27dc4eab")
+    run_benchmark("857d260e69be42f7ab8ca4e04c30ec2c")
 

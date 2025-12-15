@@ -14,7 +14,7 @@ def extract_features(X, config):
     Returns:
         np.array: 2D array of features (n_samples, n_features).
     """
-    print(f"   Extracting Features ({config.feature_type})...")
+    #print(f"   Extracting Features ({config.feature_type})...")
     feats = []
     
     # Pre-calculate params to avoid lookup in loop
@@ -35,7 +35,7 @@ def extract_features(X, config):
             # --- MEL SPECTROGRAM ---
             # Power spectrogram (amplitude squared)
             ft = librosa.feature.melspectrogram(
-                y=x, sr=sr, 
+                y=x, sr=config.sr, 
                 n_mels=config.n_mels, 
                 fmax=config.fmax
             )
