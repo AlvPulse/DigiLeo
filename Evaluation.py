@@ -12,7 +12,7 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 # --- CONFIGURATION ---
 BENCHMARK_CONFIG = {
     'folder_class0': './EvalDatasets/ESC-50',    # Update path to your Zeros folder
-    'folder_class1': './EvalDatasets/droneAudio',# Update path to your Ones folder
+    'folder_class1': './EvalDatasets/AudioDD',# Update path to your Ones folder
     'window_samples': 16000,
     'overlap': 0.0,                      # 0% overlap for strict testing
     'vote_threshold': 0.3                # If >30% of chunks are 'Event', file is Event
