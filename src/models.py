@@ -4,7 +4,7 @@ from sklearn.svm import SVC
 from sklearn.linear_model import LogisticRegression
 import numpy as np
 import copy
-from src.dl_models import PyTorchClassifier, AudioCNN, AudioDNN, SaraCNN
+from src.dl_models import PyTorchClassifier, AudioCNN, AudioDNN, SaraCNN, AudioLSTM
 
 class ModelFactory:
     @staticmethod
@@ -13,7 +13,7 @@ class ModelFactory:
         Factory method to initialize any model dynamically.
         
         Args:
-            model_type (str): 'rf', 'svm', 'log_reg', 'cnn', 'dnn', 'ensemble', 'sara_cnn'
+            model_type (str): 'rf', 'svm', 'log_reg', 'cnn', 'dnn', 'ensemble', 'sara_cnn', 'lstm'
             params (dict): Dictionary of hyperparameters
         """
         model_type = model_type.lower()
@@ -62,6 +62,11 @@ class ModelFactory:
             wrapper_params = {k: v for k, v in params.items() if k in ['epochs', 'batch_size', 'lr', 'device']}
             model_arch_params = {k: v for k, v in params.items() if k not in wrapper_params}
             return PyTorchClassifier(SaraCNN, model_arch_params, **wrapper_params)
+
+        elif model_type == 'lstm':
+            wrapper_params = {k: v for k, v in params.items() if k in ['epochs', 'batch_size', 'lr', 'device']}
+            model_arch_params = {k: v for k, v in params.items() if k not in wrapper_params}
+            return PyTorchClassifier(AudioLSTM, model_arch_params, **wrapper_params)
 
         elif model_type == 'dnn':
             wrapper_params = {k: v for k, v in params.items() if k in ['epochs', 'batch_size', 'lr', 'device']}

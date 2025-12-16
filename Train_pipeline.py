@@ -67,11 +67,27 @@ def train_model(cfg, experiment_name="Rational_Drone_Pipeline", parent_run_id=No
         # 4. Balance & Augment (TRAIN ONLY)
         X_train_aug, y_train_aug = balance_training_set(X_train_raw, y_train_raw, cfg)
         
-        # 5. Feature Extraction (Using generic extractor)
-        # FORCE return_2d_features if using CNN/SaraCNN to avoid shape mismatch
-        if cfg.model_type in ['cnn', 'sara_cnn'] and not cfg.return_2d_features:
-            print("⚠️ Warning: model_type requires 2D features. Overriding config.")
-            cfg.return_2d_features = True
+        # 5. Feature Extraction & Smart Configuration
+        # Apply specific settings based on model family
+        classical_models = ['rf', 'svm', 'log_reg', 'ensemble']
+        dl_models = ['cnn', 'dnn', 'lstm', 'sara_cnn']
+
+        if cfg.model_type in dl_models:
+             # Deep Learning: Force FBE (Mel) and 2D Input
+             # User requested FBE (Mel) for DL, MFCC for others.
+             print(f"🧠 Deep Learning Model ({cfg.model_type}) detected.")
+             print("   -> Switching to Mel-Spectrogram (FBE) features (n_mels={cfg.n_mels}).")
+             print("   -> Enabling 2D Feature return.")
+             cfg.feature_type = 'mel'
+             cfg.return_2d_features = True
+
+        elif cfg.model_type in classical_models:
+             # Classical: Prefer Enriched MFCC 1D
+             print(f"🤖 Classical Model ({cfg.model_type}) detected.")
+             if cfg.feature_type != 'mfcc':
+                 print("   -> Switching to MFCC features (standard for RF/SVM).")
+                 cfg.feature_type = 'mfcc'
+             cfg.return_2d_features = False
 
         print(f"feat ({cfg.feature_type}) Train...")
         X_train_vec = extract_features(X_train_aug, cfg)
