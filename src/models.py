@@ -1,10 +1,10 @@
 # models.py
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 from sklearn.svm import SVC
 from sklearn.linear_model import LogisticRegression
-from sklearn.mixture import GaussianMixture
-# You can add XGBoost/LightGBM here later if installed
-# from xgboost import XGBClassifier
+import numpy as np
+import copy
+from src.dl_models import PyTorchClassifier, AudioCNN, AudioDNN
 
 class ModelFactory:
     @staticmethod
@@ -13,13 +13,12 @@ class ModelFactory:
         Factory method to initialize any model dynamically.
         
         Args:
-            model_type (str): 'rf', 'svm', 'log_reg', 'gmm'
-            params (dict): Dictionary of hyperparameters (e.g. {'n_estimators': 100})
+            model_type (str): 'rf', 'svm', 'log_reg', 'cnn', 'dnn', 'ensemble'
+            params (dict): Dictionary of hyperparameters
         """
         model_type = model_type.lower()
         
         if model_type == 'rf':
-            # Set defaults but allow overrides from params
             default_params = {
                 'n_estimators': 100, 
                 'max_depth': 10, 
@@ -27,7 +26,6 @@ class ModelFactory:
                 'n_jobs': -1,
                 'random_state': 42
             }
-            # Update defaults with whatever user passed in config
             default_params.update(params)
             return RandomForestClassifier(**default_params)
             
@@ -35,7 +33,7 @@ class ModelFactory:
             default_params = {
                 'kernel': 'rbf',
                 'C': 1.0,
-                'probability': True, # CRITICAL: Required for predict_proba
+                'probability': True,
                 'class_weight': 'balanced',
                 'random_state': 42
             }
@@ -51,20 +49,32 @@ class ModelFactory:
             }
             default_params.update(params)
             return LogisticRegression(**default_params)
+
+        elif model_type == 'cnn':
+            # Params for wrapper: epochs, batch_size, lr
+            wrapper_params = {k: v for k, v in params.items() if k in ['epochs', 'batch_size', 'lr', 'device']}
+            # Params for model architecture: n_features, n_timesteps (passed dynamically often)
+            model_arch_params = {k: v for k, v in params.items() if k not in wrapper_params}
             
-        elif model_type == 'gmm':
-            # GMM is a special case (Generative), but we can wrap it if needed
-            # For now, let's treat it as a standard estimator setup
-            default_params = {
-                'n_components': 16,
-                'covariance_type': 'diag',
-                'random_state': 42
-            }
-            default_params.update(params)
-            # Note: GMM doesn't have a simple 'fit(X, y)' for classification
-            # It usually requires custom handling (one GMM per class).
-            # If you want strictly generic pipeline, GMM is the odd one out.
-            raise NotImplementedError("GMM requires custom training logic separate from classifiers.")
+            return PyTorchClassifier(AudioCNN, model_arch_params, **wrapper_params)
+
+        elif model_type == 'dnn':
+            wrapper_params = {k: v for k, v in params.items() if k in ['epochs', 'batch_size', 'lr', 'device']}
+            model_arch_params = {k: v for k, v in params.items() if k not in wrapper_params}
+
+            return PyTorchClassifier(AudioDNN, model_arch_params, **wrapper_params)
+
+        elif model_type == 'ensemble':
+            # Expects 'estimators' list in params, where each item is (name, model_type, model_params)
+            # Example: [('rf', 'rf', {...}), ('svm', 'svm', {...})]
+            estimators_config = params.get('estimators', [])
+            estimators = []
+
+            for name, m_type, m_params in estimators_config:
+                estimators.append((name, ModelFactory.get_model(m_type, m_params)))
+
+            voting = params.get('voting', 'soft')
+            return VotingClassifier(estimators=estimators, voting=voting, n_jobs=-1)
             
         else:
             raise ValueError(f"Unknown model_type: {model_type}")

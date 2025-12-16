@@ -20,51 +20,61 @@ def load_raw_dataset(config):
     
     # Global limits logic is tricky with multiple sources. 
     # Current implementation: limit applies PER SOURCE to ensure mixing.
-    # Or should it be total? Let's assume per source for diversity.
     
     for source in config.data_sources:
         print(f"\n📦 Processing Source: {source['path']} ({source['type']})")
         
+        # Counts now refer to CHUNKS, not files
         counts = {0: 0, 1: 0}
         
         if source['type'] == 'disk_hf':
-            # Existing logic for HF Disk dataset
             try:
                 ds = load_from_disk(source['path'])
-                # No cast_column("audio", Audio(decode=False)) because we want raw bytes or decoded audio
-                # If we decode=False, we get bytes. If we decode=True, we get array.
-                # Let's try decode=True but be robust.
-                # Actually, the original code used decode=False and io.BytesIO.
-                # The issue "The least populated classes in y have only 1 member" suggests
-                # we are not loading enough data. Maybe min_audio_len is too high?
-                # or max_raw_samples is limiting too much?
-                
-                # Let's stick to the working logic but add better error logging and fallback
                 ds = ds.cast_column("audio", Audio(decode=False))
                 
-                for item in ds:
+                # Convert to list and shuffle to ensure random file access
+                # CAUTION: If dataset is huge, this list(range) is fine, but don't list(ds)
+                indices = list(range(len(ds)))
+                random.shuffle(indices)
+
+                for idx in indices:
+                    # Check if we have enough chunks for both classes
                     if counts[0] >= config.max_raw_samples and counts[1] >= config.max_raw_samples:
                         break
                         
+                    item = ds[idx]
                     label = item['label']
+
+                    # Optimization: Don't even load audio if this class is full
                     if counts[label] >= config.max_raw_samples: continue
                     
                     try:
                         audio_bytes = item['audio']['bytes']
                         audio, _ = librosa.load(io.BytesIO(audio_bytes), sr=16000)
-                        _process_and_add(audio, label, config, X_raw, y_raw, counts)
+
+                        # Process and get chunks
+                        new_chunks = _process_and_get_chunks(audio, config)
+
+                        # Sub-sample chunks from this file to avoid "one file dominates"
+                        # e.g. Max 20 chunks per file
+                        if len(new_chunks) > config.max_chunks_per_file:
+                            new_chunks = random.sample(new_chunks, config.max_chunks_per_file)
+
+                        # Add to lists
+                        for chunk in new_chunks:
+                            if counts[label] >= config.max_raw_samples: break
+                            X_raw.append(chunk)
+                            y_raw.append(label)
+                            counts[label] += 1
+
                     except Exception as e:
-                        # print(f"Skipping file due to load error: {e}")
                         continue
                         
             except Exception as e:
                 print(f"   ❌ Failed to load disk_hf source: {e}")
 
         elif source['type'] == 'folder':
-            # Logic for "Binary Wav ds" (folders yes/no)
             base_path = source['path']
-            # Map folder names to labels
-            # Assuming 'yes' = 1 (Event), 'no' = 0 (Background)
             label_map = {'yes': 1, 'no': 0}
             
             for folder_name, label in label_map.items():
@@ -72,14 +82,25 @@ def load_raw_dataset(config):
                 files = glob.glob(os.path.join(folder_path, "*.wav"))
                 print(f"   Found {len(files)} files in {folder_name}...")
                 
-                random.shuffle(files) # Shuffle to get random sample if we hit limit
+                random.shuffle(files) # Random file order
                 
                 for fpath in files:
                     if counts[label] >= config.max_raw_samples: break
                     
                     try:
                         audio, _ = librosa.load(fpath, sr=16000)
-                        _process_and_add(audio, label, config, X_raw, y_raw, counts)
+
+                        new_chunks = _process_and_get_chunks(audio, config)
+
+                        if len(new_chunks) > config.max_chunks_per_file:
+                            new_chunks = random.sample(new_chunks, config.max_chunks_per_file)
+
+                        for chunk in new_chunks:
+                            if counts[label] >= config.max_raw_samples: break
+                            X_raw.append(chunk)
+                            y_raw.append(label)
+                            counts[label] += 1
+
                     except Exception as e:
                         print(f"   Error reading {fpath}: {e}")
 
@@ -88,32 +109,30 @@ def load_raw_dataset(config):
     print(f"\n✅ Total Raw Load Complete. Total Chunks: {len(X_raw)}")
     return np.array(X_raw), np.array(y_raw)
 
-def _process_and_add(audio, label, config, X_list, y_list, counts):
-    """Helper to apply preprocessing and add to list"""
+def _process_and_get_chunks(audio, config):
+    """
+    Helper to apply preprocessing and return a list of valid chunks.
+    Does NOT modify global lists directly.
+    """
+    valid_chunks = []
+
     # 1. Drop Garbage
-    if len(audio) < config.min_audio_len: return
+    if len(audio) < config.min_audio_len: return []
     
     # 2. Normalize
     if config.normalize_audio:
         audio = librosa.util.normalize(audio)
     
-    # 3. Handle Long Files
-    chunks = handle_long_audio(audio, config.window_samples, config.long_file_strategy)
+    # 3. Handle Long Files (Splitting)
+    raw_chunks = handle_long_audio(audio, config.window_samples, config.long_file_strategy)
     
-    added_any = False
-    for chunk in chunks:
-        # 4. Handle Short Files
+    for chunk in raw_chunks:
+        # 4. Handle Short Files (Padding)
         processed = handle_short_audio(chunk, config.window_samples, config.short_file_strategy)
-        
         if processed is not None:
-            X_list.append(processed)
-            y_list.append(label)
-            added_any = True
+            valid_chunks.append(processed)
             
-    # Only count the ORIGINAL file towards the limit if we used at least one chunk
-    if added_any:
-        counts[label] += 1
-        # print(f"   Collected: C0={counts[0]} | C1={counts[1]}", end='\r')
+    return valid_chunks
 
 
 def balance_training_set(X_train, y_train, config):
