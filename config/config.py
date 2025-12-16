@@ -21,8 +21,8 @@ class ExperimentConfig:
         'class1': './EvalDatasets/AudioDD'
     })
 
-    max_raw_samples: int = 3e4     # Limit per class per source (or total, depending on logic)
-    min_audio_len: int = 16000      # Drop raw files shorter than this (samples)
+    max_raw_samples: int = 3e3     # Limit per class per source (or total, depending on logic)
+    min_audio_len: int = 8000      # Drop raw files shorter than this (samples)
     test_size: float = 0.1
     
     # --- 2. SHAPING STRATEGIES ---
