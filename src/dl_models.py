@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import copy
+import inspect
 from sklearn.base import BaseEstimator, ClassifierMixin
 from torch.utils.data import DataLoader, TensorDataset
 
@@ -103,15 +104,34 @@ class PyTorchClassifier(BaseEstimator, ClassifierMixin):
 
         # Determine Input Shape dynamically
         if self.model is None:
-            if 'input_dim' not in self.model_params:
+            # We work on a copy to avoid mutating the original dict which might be used elsewhere
+            # or in subsequent fits (though fit clears model, better safe)
+            init_params = self.model_params.copy()
+
+            if 'input_dim' not in init_params:
                 # Infer from X
                 if len(X.shape) == 2: # (N, Features)
-                     self.model_params['input_dim'] = X.shape[1]
+                     init_params['input_dim'] = X.shape[1]
                 elif len(X.shape) == 3: # (N, H, W)
-                     self.model_params['n_features'] = X.shape[1]
-                     self.model_params['n_timesteps'] = X.shape[2]
+                     init_params['n_features'] = X.shape[1]
+                     init_params['n_timesteps'] = X.shape[2]
 
-            self.model = self.model_class(**self.model_params).to(self.device)
+            # Filter params to only those accepted by model_class.__init__
+            sig = inspect.signature(self.model_class.__init__)
+            valid_keys = [
+                p.name for p in sig.parameters.values()
+                if p.name != 'self' and p.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+            ]
+
+            # Check for **kwargs support (VAR_KEYWORD)
+            has_var_keyword = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+
+            if not has_var_keyword:
+                filtered_params = {k: v for k, v in init_params.items() if k in valid_keys}
+            else:
+                filtered_params = init_params
+
+            self.model = self.model_class(**filtered_params).to(self.device)
 
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
