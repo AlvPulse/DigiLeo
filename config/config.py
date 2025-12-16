@@ -50,25 +50,25 @@ class ExperimentConfig:
     normalize_audio: bool = True
     
     # --- 5. MODEL PARAMETERS ---
-    model_type: str = "rf"           # 'rf', 'svm', 'cnn', 'dnn', 'ensemble'
+    model_type: str = "cnn"           # 'rf', 'svm', 'cnn', 'dnn', 'ensemble'
     
     # Default model params
-    model_params: Dict[str, Any] = field(default_factory=lambda: {
-        'n_estimators': 150,
-        'max_depth': 12,
-        'class_weight': 'balanced',
-        'n_jobs': -1
-    })
+    # model_params: Dict[str, Any] = field(default_factory=lambda: {
+    #     'n_estimators': 150,
+    #     'max_depth': 12,
+    #     'class_weight': 'balanced',
+    #     'n_jobs': -1
+    # })
 
     # Example Ensemble Configuration (copy this structure to model_params when using ensemble)
-    # model_params = {
-    #     'voting': 'soft',
-    #     'estimators': [
-    #         ('rf', 'rf', {'n_estimators': 100}),
-    #         ('svm', 'svm', {'probability': True}),
-    #         ('cnn', 'cnn', {'epochs': 5, 'batch_size': 32})
-    #     ]
-    # }
+    model_params = {
+        'voting': 'soft',
+        'estimators': [
+            ('rf', 'rf', {'n_estimators': 100}),
+            ('svm', 'svm', {'probability': True}),
+            ('cnn', 'cnn', {'epochs': 5, 'batch_size': 32})
+        ]
+    }
 
     # Search spaces for Randomized Search
     search_space: Dict[str, List] = field(default_factory=lambda: {

@@ -193,5 +193,5 @@ def run_benchmark(run_id=None):
 if __name__ == "__main__":
     # You can pass a specific run_id string here, e.g., "a1b2c3..."
     # Or leave None to test the latest model
-    run_benchmark("857d260e69be42f7ab8ca4e04c30ec2c")
+    run_benchmark("cf05e4d7f48e4d769603833ad7d0ac5b")
 
