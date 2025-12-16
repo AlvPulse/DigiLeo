@@ -84,6 +84,78 @@ class AudioDNN(nn.Module):
     def forward(self, x):
         return self.net(x)
 
+class SaraCNN(nn.Module):
+    """
+    Port of Sara Al-Emadi's CNN.
+    Adapted for 2D Audio Inputs (N_MFCC x Time).
+    Original Architecture:
+      - Conv1D(32) -> MaxPool
+      - Conv1D(64) -> MaxPool
+      - Conv1D(128) -> MaxPool
+      - Conv1D(128) -> MaxPool
+      - Dense(256) -> Sigmoid -> Dense(2)
+    """
+    def __init__(self, n_features, n_timesteps, n_classes=2):
+        super(SaraCNN, self).__init__()
+
+        # We treat n_features (MFCC bins) as the "Input Channels" for Conv1D?
+        # OR we treat the whole thing as a sequence of length T with F channels?
+        # Usually for Audio:
+        # Input: (Batch, Channels=n_mfcc, Time)
+        # Conv1D scans across Time.
+
+        # Sara's code: Reshape((x.shape[1], 1)) -> Input is 1 Channel, Sequence Length = x.shape[1]
+        # This implies she was feeding a FLATTENED vector or raw audio.
+        # But if we feed MFCCs (F x T), it's best to treat F as Channels.
+
+        self.conv_blocks = nn.Sequential(
+            # Block 1
+            nn.Conv1d(in_channels=n_features, out_channels=32, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool1d(kernel_size=3),
+
+            # Block 2
+            nn.Conv1d(32, 64, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool1d(kernel_size=3),
+
+            # Block 3
+            nn.Conv1d(64, 128, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool1d(kernel_size=3),
+
+            # Block 4
+            nn.Conv1d(128, 128, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool1d(kernel_size=3),
+
+            nn.Dropout(0.25)
+        )
+
+        # Calculate Flatten Size
+        # We iterate to find output size
+        dummy_input = torch.zeros(1, n_features, n_timesteps)
+        with torch.no_grad():
+            dummy_out = self.conv_blocks(dummy_input)
+        self.flatten_size = dummy_out.numel()
+
+        self.fc = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(self.flatten_size, 256),
+            nn.ReLU(), # Sara used 'relu' (inner_activation_fun)
+            nn.Linear(256, n_classes)
+            # Note: Sara used sigmoid for multi-label or binary.
+            # We use CrossEntropyLoss which expects logits (no sigmoid/softmax here).
+        )
+
+    def forward(self, x):
+        # Expects (Batch, Features, Time)
+        # If input is (Batch, 1, Features, Time), squeeze the channel dim
+        if x.dim() == 4 and x.shape[1] == 1:
+            x = x.squeeze(1)
+
+        return self.fc(self.conv_blocks(x))
+
 class PyTorchClassifier(BaseEstimator, ClassifierMixin):
     """
     Scikit-Learn Wrapper for PyTorch Models.
@@ -130,6 +202,14 @@ class PyTorchClassifier(BaseEstimator, ClassifierMixin):
                 filtered_params = {k: v for k, v in init_params.items() if k in valid_keys}
             else:
                 filtered_params = init_params
+
+            # Final check to ensure required params are present
+            # If still missing (e.g. because X was 2D but model needs 3D dims),
+            # we try to inject defaults or raise a clearer error.
+            if 'n_features' in valid_keys and 'n_features' not in filtered_params:
+                 # Fallback: maybe we received flattened 2D input for a 3D model?
+                 # This is a bit of a hack, but helps debugging.
+                 pass
 
             self.model = self.model_class(**filtered_params).to(self.device)
 

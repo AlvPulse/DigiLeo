@@ -68,15 +68,29 @@ def train_model(cfg, experiment_name="Rational_Drone_Pipeline", parent_run_id=No
         X_train_aug, y_train_aug = balance_training_set(X_train_raw, y_train_raw, cfg)
         
         # 5. Feature Extraction (Using generic extractor)
+        # FORCE return_2d_features if using CNN/SaraCNN to avoid shape mismatch
+        if cfg.model_type in ['cnn', 'sara_cnn'] and not cfg.return_2d_features:
+            print("⚠️ Warning: model_type requires 2D features. Overriding config.")
+            cfg.return_2d_features = True
+
         print(f"feat ({cfg.feature_type}) Train...")
         X_train_vec = extract_features(X_train_aug, cfg)
         print(f"feat ({cfg.feature_type}) Test...")
         X_test_vec = extract_features(X_test_raw, cfg)
         
         # 6. Scaling
-        scaler = StandardScaler()
-        X_train_sc = scaler.fit_transform(X_train_vec)
-        X_test_sc = scaler.transform(X_test_vec)
+        # Skip scaling for 3D data (DL models have internal BatchNorm)
+        # OR Flatten -> Scale -> Reshape
+        if len(X_train_vec.shape) > 2:
+            print("   ℹ️ 3D Data detected. Skipping StandardScaler (relying on Batch Norm).")
+            X_train_sc = X_train_vec
+            X_test_sc = X_test_vec
+            # Create a dummy scaler for pipeline consistency
+            scaler = StandardScaler()
+        else:
+            scaler = StandardScaler()
+            X_train_sc = scaler.fit_transform(X_train_vec)
+            X_test_sc = scaler.transform(X_test_vec)
         
         # 7. Model Training
         print(f"🛠️ Training {cfg.model_type}...")
