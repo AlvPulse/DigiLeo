@@ -137,8 +137,8 @@ def run_benchmark(run_id=None):
             # y_true.append(0)
             # y_pred.append(pred)
             # ratios.append(ratio)
-            y_true.append([0]* len(chunk_preds))
-            y_pred.append(chunk_preds)
+            y_true.extend([0]* len(chunk_preds))
+            y_pred.extend(chunk_preds)
     
     # Process Class 1
     for f in files_1:
@@ -147,13 +147,13 @@ def run_benchmark(run_id=None):
             # y_true.append(1)
             # y_pred.append(pred)
             # ratios.append(ratio)
-            y_true.append([1]* len(chunk_preds))
-            y_pred.append(chunk_preds)
+            y_true.extend([1]* len(chunk_preds))
+            y_pred.extend(chunk_preds)
             
     if not y_true:
         print("❌ No valid files processed. Aborting.")
         return
-
+    #print(y_true.size(),y_pred.size())
     # 3. Calculate Metrics
     acc = accuracy_score(y_true, y_pred)
     prec = precision_score(y_true, y_pred, zero_division=0)

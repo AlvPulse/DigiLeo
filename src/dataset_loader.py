@@ -156,23 +156,23 @@ def balance_training_set(X_train, y_train, config):
     if n0 < target_count:
         needed = target_count - n0
         print(f"   🚀 Generating {needed} augmented samples for Class 0...")
-        _augment_to_list(X0, needed, 0, X_balanced, y_balanced)
+        _augment_to_list(X0, needed, 0, X_balanced, y_balanced,config)
 
     # Balance 1 if needed
     if n1 < target_count:
         needed = target_count - n1
         print(f"   🚀 Generating {needed} augmented samples for Class 1...")
-        _augment_to_list(X1, needed, 1, X_balanced, y_balanced)
+        _augment_to_list(X1, needed, 1, X_balanced, y_balanced,config)
     
     return np.array(X_balanced), np.array(y_balanced)
 
-def _augment_to_list(reference_samples, needed, label, X_out, y_out):
+def _augment_to_list(reference_samples, needed, label, X_out, y_out,config):
     generated = 0
     n_refs = len(reference_samples)
     while generated < needed:
         idx = random.randint(0, n_refs - 1)
         original_sample = reference_samples[idx]
-        new_sample = augment_audio(original_sample)
+        new_sample = augment_audio(original_sample,config)
         X_out.append(new_sample)
         y_out.append(label)
         generated += 1

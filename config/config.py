@@ -12,14 +12,16 @@ class ExperimentConfig:
         {'type': 'folder', 'path': 'Binary Wav ds'} # "yes"/"no" folders inside
     ])
     sr= 16000
-    
+    use_background_noise: bool = True
+    background_noise_path: str = "./EvalDatasets/ESC-50" # Path to your 'zeros' folder
+
     # Validation datasets for Evaluation.py
     validation_sources: Dict[str, str] = field(default_factory=lambda: {
-        'class0': './EvalDatasets/ESC-50',
+        'class0': './EvalDatasets/TAU',
         'class1': './EvalDatasets/AudioDD'
     })
 
-    max_raw_samples: int = 1000     # Limit per class per source (or total, depending on logic)
+    max_raw_samples: int = 3e4     # Limit per class per source (or total, depending on logic)
     min_audio_len: int = 16000      # Drop raw files shorter than this (samples)
     test_size: float = 0.1
     
