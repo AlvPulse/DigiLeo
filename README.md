@@ -1,4 +1,4 @@
-# Rational Drone Pipeline
+# Rational Event Pipeline
 
 This repository implements a machine learning pipeline for audio event detection. It supports classical Machine Learning (RF, SVM), Deep Learning (CNN, DNN), and Ensemble methods.
 
