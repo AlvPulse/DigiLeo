@@ -348,6 +348,8 @@ class PyTorchClassifier(BaseEstimator, ClassifierMixin):
 
             self.model = self.model_class(**filtered_params).to(self.device)
 
+        # Robust Loss Function: Standard Cross Entropy (Works for N-class classification)
+        # Avoids shape mismatch issues with BCEWithLogitsLoss
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
 
