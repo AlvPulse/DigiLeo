@@ -278,8 +278,13 @@ class PyTorchClassifier(BaseEstimator, ClassifierMixin):
                  pass
 
             self.model = self.model_class(**filtered_params).to(self.device)
+        
+        pos_weight = torch.tensor([2.0]).to(self.device) 
 
-        criterion = nn.CrossEntropyLoss()
+        # Use BCEWithLogitsLoss for binary classification (Standard for 2-class DL)
+        # It's more stable than CrossEntropy for binary problems
+        criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+        #criterion = nn.CrossEntropyLoss()
         optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
 
         # Prepare Data
@@ -293,6 +298,7 @@ class PyTorchClassifier(BaseEstimator, ClassifierMixin):
 
         # Training Loop
         self.model.train()
+        stopper = EarlyStopping(patience=3) # Stop after 3 bad epochs
         for epoch in range(self.epochs):
             running_loss = 0.0
             for inputs, labels in loader:
@@ -305,7 +311,13 @@ class PyTorchClassifier(BaseEstimator, ClassifierMixin):
                 optimizer.step()
                 running_loss += loss.item()
 
-            # print(f"Epoch {epoch+1}/{self.epochs}, Loss: {running_loss/len(loader):.4f}")
+            avg_val_loss = running_loss / len(loader)
+            print(f"Epoch {epoch+1}/{self.epochs}, Loss: {running_loss/len(loader):.4f}")
+            # Check Early Stopping
+            stopper(avg_val_loss)
+            if stopper.early_stop:
+                print("🛑 Early stopping triggered!")
+                break
 
         return self
 
@@ -326,3 +338,23 @@ class PyTorchClassifier(BaseEstimator, ClassifierMixin):
                 probas_list.append(torch.softmax(outputs, dim=1).cpu().numpy())
 
         return np.concatenate(probas_list, axis=0)
+    
+    # Add this class at the top of src/dl_models.py
+class EarlyStopping:
+    def __init__(self, patience=5, min_delta=0.001):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.counter = 0
+        self.best_loss = None
+        self.early_stop = False
+
+    def __call__(self, val_loss):
+        if self.best_loss is None:
+            self.best_loss = val_loss
+        elif val_loss > self.best_loss - self.min_delta:
+            self.counter += 1
+            if self.counter >= self.patience:
+                self.early_stop = True
+        else:
+            self.best_loss = val_loss
+            self.counter = 0

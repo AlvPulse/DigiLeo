@@ -151,7 +151,8 @@ def train_model(cfg, experiment_name="Rational_Drone_Pipeline", parent_run_id=No
         acc = accuracy_score(y_test_raw, y_pred)
         
         print(f"✅ Test Accuracy: {acc:.2%}")
-        # print(classification_report(y_test_raw, y_pred)) # Can be noisy in loops
+        #print(f"")
+        print(classification_report(y_test_raw, y_pred)) # Can be noisy in loops
         
         # DET Curve Plotting
         try:
