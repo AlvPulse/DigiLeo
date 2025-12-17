@@ -88,6 +88,10 @@ def extract_features(X, config):
             # Concatenate all features
             # Shape per sample: (n_features * 8, )
             combined = np.concatenate([mu, sigma, min_val, max_val, sk, ku, ent, dt_mu, ddt_mu])
+
+            # Handle NaNs (common with silent chunks causing 0 variance for skew/kurtosis)
+            combined = np.nan_to_num(combined, nan=0.0, posinf=0.0, neginf=0.0)
+
             feats.append(combined)
         
     return np.array(feats)
