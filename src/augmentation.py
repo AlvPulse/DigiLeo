@@ -85,7 +85,8 @@ def augment_audio(audio,config, sr=16000,Target_length = 8000):
     y = audio.copy()
     
     # Randomly choose ONE effect (Expanded List)
-    choice = random.choice(['pitch', 'speed', 'white_noise', 'pink_noise', 'gain', 'polarity','mix_bg'])
+    #choice = random.choice(['pitch', 'speed', 'white_noise', 'pink_noise', 'gain', 'polarity','mix_bg'])
+    choice = random.choice(['pitch', 'speed','mix_bg'])
     
     try:
         if choice == 'mix_bg' and config.use_background_noise:

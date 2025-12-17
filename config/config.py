@@ -40,7 +40,7 @@ class ExperimentConfig:
     return_2d_features: bool = False # Set True for CNN
 
     # MFCC Params
-    n_mfcc: int = 40
+    n_mfcc: int = 13
     drop_first_coeff: bool = True
     
     # Mel Params
@@ -121,7 +121,7 @@ class ExperimentConfig:
                 'epochs': 20,
                 'batch_size': 32,
                 'lr': 0.001,
-                'device': 'cuda',  # or 'cpu'
+                'device': 'cpu',  # or 'cpu'
                 
                 # Architecture Params
                 'input_channels': 1,     # MFCC is treated as 1 channel image usually
