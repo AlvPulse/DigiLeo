@@ -8,7 +8,7 @@ import json
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, DetCurveDisplay
 
 from config.config import ExperimentConfig
 from src.features import extract_features
@@ -26,9 +26,15 @@ def load_artifacts(run_id=None):
     
     print(f"📥 Loading artifacts from Run: {run_id}")
     
-    # 1. Load Scaler
-    local_scaler = mlflow.artifacts.download_artifacts(run_id=run_id, artifact_path="scaler.pkl")
-    scaler = joblib.load(local_scaler)
+    # 1. Load Scaler (Gracefully handle missing scaler for DL models)
+    scaler = None
+    try:
+        local_scaler = mlflow.artifacts.download_artifacts(run_id=run_id, artifact_path="scaler.pkl")
+        if os.path.exists(local_scaler): # Check if file actually exists
+             scaler = joblib.load(local_scaler)
+             print("✅ Loaded Scaler")
+    except Exception as e:
+        print(f"ℹ️ No scaler found (normal for DL models): {e}")
     
     # 2. Load Model
     model_uri = f"runs:/{run_id}/model"
@@ -84,13 +90,25 @@ def process_file(filepath, label, scaler, model, config, vote_threshold=0.3, ove
         feats = extract_features(chunks, config)
         
         # Scale
-        feats_sc = scaler.transform(feats)
+        if scaler is not None:
+            feats_sc = scaler.transform(feats)
+        else:
+            feats_sc = feats
         
         # Predict all chunks at once
         try:
             chunk_preds = model.predict(feats_sc)
+
+            # Get scores for DET curve
+            if hasattr(model, "predict_proba"):
+                chunk_scores = model.predict_proba(feats_sc)[:, 1]
+            elif hasattr(model, "decision_function"):
+                chunk_scores = model.decision_function(feats_sc)
+            else:
+                chunk_scores = chunk_preds # Fallback
         except:
             chunk_preds = [0] * len(feats_sc) # Fallback
+            chunk_scores = [0.0] * len(feats_sc)
             
         # --- VOTING LOGIC ---
         # Calculate percentage of "Event" chunks
@@ -99,7 +117,7 @@ def process_file(filepath, label, scaler, model, config, vote_threshold=0.3, ove
         # Final Decision
         final_pred = 1 if event_ratio >= vote_threshold else 0
         
-        return final_pred, event_ratio,chunk_preds
+        return final_pred, event_ratio, chunk_preds, chunk_scores
 
     except Exception as e:
         print(f"❌ Error processing {filepath}: {e}")
@@ -125,35 +143,31 @@ def run_benchmark(run_id=None):
     
     y_true = []
     y_pred = []
+    y_scores = []
     ratios = []
     
     print("🚀 Starting Evaluation...")
     
     # Process Class 0
     for f in files_0:
-        pred, ratio,chunk_preds = process_file(f, 0, scaler, model, config)
+        pred, ratio, chunk_preds, chunk_sc = process_file(f, 0, scaler, model, config)
         if pred is not None:
-            
-            # y_true.append(0)
-            # y_pred.append(pred)
-            # ratios.append(ratio)
             y_true.extend([0]* len(chunk_preds))
             y_pred.extend(chunk_preds)
+            y_scores.extend(chunk_sc)
     
     # Process Class 1
     for f in files_1:
-        pred, ratio,chunk_preds = process_file(f, 1, scaler, model, config)
+        pred, ratio, chunk_preds, chunk_sc = process_file(f, 1, scaler, model, config)
         if pred is not None:
-            # y_true.append(1)
-            # y_pred.append(pred)
-            # ratios.append(ratio)
             y_true.extend([1]* len(chunk_preds))
             y_pred.extend(chunk_preds)
+            y_scores.extend(chunk_sc)
             
     if not y_true:
         print("❌ No valid files processed. Aborting.")
         return
-    #print(y_true.size(),y_pred.size())
+
     # 3. Calculate Metrics
     acc = accuracy_score(y_true, y_pred)
     prec = precision_score(y_true, y_pred, zero_division=0)
@@ -186,6 +200,18 @@ def run_benchmark(run_id=None):
             plt.savefig("benchmark_confusion_matrix.png")
             mlflow.log_artifact("benchmark_confusion_matrix.png")
             plt.close()
+
+            # DET Curve
+            try:
+                print("   📊 Generating Benchmark DET Curve...")
+                DetCurveDisplay.from_predictions(y_true, y_scores)
+                plt.title(f"Benchmark DET Curve - {model_name}")
+                plt.savefig("benchmark_det_curve.png")
+                mlflow.log_artifact("benchmark_det_curve.png")
+                plt.close()
+            except Exception as e:
+                print(f"   ⚠️ Failed to plot DET Curve: {e}")
+
         print(f"✅ Results logged to Run ID: {run_id}")
     except Exception as e:
         print(f"⚠️ Could not log to MLflow run {run_id}: {e}")
