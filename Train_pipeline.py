@@ -7,7 +7,8 @@ import json
 import tempfile
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import classification_report, accuracy_score
+from sklearn.metrics import classification_report, accuracy_score, DetCurveDisplay
+import matplotlib.pyplot as plt
 import os
 import pathlib
 
@@ -67,11 +68,27 @@ def train_model(cfg, experiment_name="Rational_Drone_Pipeline", parent_run_id=No
         # 4. Balance & Augment (TRAIN ONLY)
         X_train_aug, y_train_aug = balance_training_set(X_train_raw, y_train_raw, cfg)
         
-        # 5. Feature Extraction (Using generic extractor)
-        # FORCE return_2d_features if using CNN/SaraCNN to avoid shape mismatch
-        if cfg.model_type in ['cnn', 'sara_cnn'] and not cfg.return_2d_features:
-            print("⚠️ Warning: model_type requires 2D features. Overriding config.")
-            cfg.return_2d_features = True
+        # 5. Feature Extraction & Smart Configuration
+        # Apply specific settings based on model family
+        classical_models = ['rf', 'svm', 'log_reg', 'ensemble']
+        dl_models = ['cnn', 'dnn', 'lstm', 'sara_cnn']
+
+        if cfg.model_type in dl_models:
+             # Deep Learning: Force FBE (Mel) and 2D Input
+             # User requested FBE (Mel) for DL, MFCC for others.
+             print(f"🧠 Deep Learning Model ({cfg.model_type}) detected.")
+             print("   -> Switching to Mel-Spectrogram (FBE) features (n_mels={cfg.n_mels}).")
+             print("   -> Enabling 2D Feature return.")
+             cfg.feature_type = 'mel'
+             cfg.return_2d_features = True
+
+        elif cfg.model_type in classical_models:
+             # Classical: Prefer Enriched MFCC 1D
+             print(f"🤖 Classical Model ({cfg.model_type}) detected.")
+             if cfg.feature_type != 'mfcc':
+                 print("   -> Switching to MFCC features (standard for RF/SVM).")
+                 cfg.feature_type = 'mfcc'
+             cfg.return_2d_features = False
 
         print(f"feat ({cfg.feature_type}) Train...")
         X_train_vec = extract_features(X_train_aug, cfg)
@@ -85,8 +102,7 @@ def train_model(cfg, experiment_name="Rational_Drone_Pipeline", parent_run_id=No
             print("   ℹ️ 3D Data detected. Skipping StandardScaler (relying on Batch Norm).")
             X_train_sc = X_train_vec
             X_test_sc = X_test_vec
-            # Create a dummy scaler for pipeline consistency
-            scaler = StandardScaler()
+            scaler = None # Signal that no scaler is used
         else:
             scaler = StandardScaler()
             X_train_sc = scaler.fit_transform(X_train_vec)
@@ -100,16 +116,45 @@ def train_model(cfg, experiment_name="Rational_Drone_Pipeline", parent_run_id=No
         # 8. Evaluation
         print("📝 Evaluating...")
         y_pred = model.predict(X_test_sc)
+
+        # Get Probabilities for DET Curve (if supported)
+        try:
+            y_scores = model.predict_proba(X_test_sc)[:, 1] # Probability of Class 1
+        except:
+            # Fallback for models without probability (e.g. some SVMs if prob=False)
+            # Use decision_function if available
+            if hasattr(model, "decision_function"):
+                y_scores = model.decision_function(X_test_sc)
+            else:
+                y_scores = y_pred # Hard fallback
+
         acc = accuracy_score(y_test_raw, y_pred)
         
         print(f"✅ Test Accuracy: {acc:.2%}")
         # print(classification_report(y_test_raw, y_pred)) # Can be noisy in loops
         
+        # DET Curve Plotting
+        try:
+            print("   📊 Generating DET Curve...")
+            DetCurveDisplay.from_predictions(y_test_raw, y_scores)
+            plt.title(f"DET Curve - {cfg.model_type}")
+            plt.savefig("det_curve_val.png")
+            mlflow.log_artifact("det_curve_val.png")
+            plt.close()
+        except Exception as e:
+            print(f"   ⚠️ Failed to plot DET Curve: {e}")
+
         # 9. Logging
         mlflow.log_metric("accuracy", acc)
         mlflow.sklearn.log_model(model, "model")
-        joblib.dump(scaler, "scaler.pkl")
-        mlflow.log_artifact("scaler.pkl")
+
+        if scaler is not None:
+            joblib.dump(scaler, "scaler.pkl")
+            mlflow.log_artifact("scaler.pkl")
+        else:
+            # Log a dummy file to indicate no scaler, or just skip it.
+            # Better to skip, and handle missing scaler in Evaluation.py
+            pass
         
         return run.info.run_id
 

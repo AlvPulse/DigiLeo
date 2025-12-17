@@ -58,13 +58,23 @@ class AudioCNN(nn.Module):
 class AudioDNN(nn.Module):
     """
     Simple MLP/DNN for Audio Classification.
-    Input shape: (Batch, input_dim)
+    Input shape:
+        - (Batch, input_dim) if flattened
+        - (Batch, n_features, n_timesteps) if 2D (will be flattened)
     """
-    def __init__(self, input_dim, n_classes=2):
+    def __init__(self, n_features=None, n_timesteps=None, input_dim=None, n_classes=2):
         super(AudioDNN, self).__init__()
 
+        # Determine actual input dimension
+        if input_dim is not None:
+            self.flat_dim = input_dim
+        elif n_features is not None and n_timesteps is not None:
+            self.flat_dim = n_features * n_timesteps
+        else:
+            raise ValueError("AudioDNN requires either 'input_dim' or both 'n_features' and 'n_timesteps'.")
+
         self.net = nn.Sequential(
-            nn.Linear(input_dim, 512),
+            nn.Linear(self.flat_dim, 512),
             nn.ReLU(),
             nn.BatchNorm1d(512),
             nn.Dropout(0.3),
@@ -82,7 +92,63 @@ class AudioDNN(nn.Module):
         )
 
     def forward(self, x):
+        # Flatten if input is 2D (or 3D tensor: B, F, T)
+        if x.dim() > 2:
+            x = x.reshape(x.size(0), -1)
         return self.net(x)
+
+class AudioLSTM(nn.Module):
+    """
+    LSTM for Audio Classification on FBE sequences.
+    Input: (Batch, Features, Time) from loader -> Transformed to (Batch, Time, Features) for LSTM
+    """
+    def __init__(self, n_features, n_timesteps, n_classes=2, hidden_size=64, num_layers=2):
+        super(AudioLSTM, self).__init__()
+
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+
+        # LSTM
+        # batch_first=True -> Input expected: (Batch, SeqLen, Features)
+        self.lstm = nn.LSTM(
+            input_size=n_features,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=0.3 if num_layers > 1 else 0
+        )
+
+        # Fully Connected Classifier
+        self.fc = nn.Linear(hidden_size, n_classes)
+
+        # Note: User asked for Sigmoid output.
+        # Since we use CrossEntropyLoss (standard for this pipeline), we output logits.
+        # This is mathematically equivalent to Sigmoid for binary tasks if we take Softmax
+        # over 2 classes, or we can use BCEWithLogitsLoss if we had 1 output.
+        # To maintain compatibility with the pipeline's predict_proba, we keep n_classes output.
+
+    def forward(self, x):
+        # x shape: (Batch, n_features, n_timesteps) typically from our loader
+        # LSTM expects: (Batch, n_timesteps, n_features)
+
+        # Check dim and permute if needed
+        if x.dim() == 3:
+             # Assume (B, F, T). Check if F matches n_features
+             # If n_features is 20 (n_mels), and shape is (B, 20, 32), then F is dim 1.
+             # We want (B, T, F) -> permute(0, 2, 1)
+             x = x.permute(0, 2, 1)
+
+        # LSTM Output
+        # out: (Batch, SeqLen, Hidden)
+        # hn: (NumLayers, Batch, Hidden)
+        out, (hn, cn) = self.lstm(x)
+
+        # We can take the last time step output or the last hidden state
+        # out[:, -1, :] is the output of the last time step
+        last_out = out[:, -1, :]
+
+        logits = self.fc(last_out)
+        return logits
 
 class SaraCNN(nn.Module):
     """

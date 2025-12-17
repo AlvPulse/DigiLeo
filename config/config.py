@@ -44,7 +44,7 @@ class ExperimentConfig:
     drop_first_coeff: bool = True
     
     # Mel Params
-    n_mels: int = 128
+    n_mels: int = 20                 # User requested 20 dimensions for FBE
     fmax: int = 8000
     
     normalize_audio: bool = True
