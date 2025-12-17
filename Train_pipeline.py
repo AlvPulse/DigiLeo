@@ -7,7 +7,8 @@ import json
 import tempfile
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import classification_report, accuracy_score
+from sklearn.metrics import classification_report, accuracy_score, DetCurveDisplay
+import matplotlib.pyplot as plt
 import os
 import pathlib
 
@@ -101,8 +102,7 @@ def train_model(cfg, experiment_name="Rational_Drone_Pipeline", parent_run_id=No
             print("   ℹ️ 3D Data detected. Skipping StandardScaler (relying on Batch Norm).")
             X_train_sc = X_train_vec
             X_test_sc = X_test_vec
-            # Create a dummy scaler for pipeline consistency
-            scaler = StandardScaler()
+            scaler = None # Signal that no scaler is used
         else:
             scaler = StandardScaler()
             X_train_sc = scaler.fit_transform(X_train_vec)
@@ -116,16 +116,45 @@ def train_model(cfg, experiment_name="Rational_Drone_Pipeline", parent_run_id=No
         # 8. Evaluation
         print("📝 Evaluating...")
         y_pred = model.predict(X_test_sc)
+
+        # Get Probabilities for DET Curve (if supported)
+        try:
+            y_scores = model.predict_proba(X_test_sc)[:, 1] # Probability of Class 1
+        except:
+            # Fallback for models without probability (e.g. some SVMs if prob=False)
+            # Use decision_function if available
+            if hasattr(model, "decision_function"):
+                y_scores = model.decision_function(X_test_sc)
+            else:
+                y_scores = y_pred # Hard fallback
+
         acc = accuracy_score(y_test_raw, y_pred)
         
         print(f"✅ Test Accuracy: {acc:.2%}")
         # print(classification_report(y_test_raw, y_pred)) # Can be noisy in loops
         
+        # DET Curve Plotting
+        try:
+            print("   📊 Generating DET Curve...")
+            DetCurveDisplay.from_predictions(y_test_raw, y_scores)
+            plt.title(f"DET Curve - {cfg.model_type}")
+            plt.savefig("det_curve_val.png")
+            mlflow.log_artifact("det_curve_val.png")
+            plt.close()
+        except Exception as e:
+            print(f"   ⚠️ Failed to plot DET Curve: {e}")
+
         # 9. Logging
         mlflow.log_metric("accuracy", acc)
         mlflow.sklearn.log_model(model, "model")
-        joblib.dump(scaler, "scaler.pkl")
-        mlflow.log_artifact("scaler.pkl")
+
+        if scaler is not None:
+            joblib.dump(scaler, "scaler.pkl")
+            mlflow.log_artifact("scaler.pkl")
+        else:
+            # Log a dummy file to indicate no scaler, or just skip it.
+            # Better to skip, and handle missing scaler in Evaluation.py
+            pass
         
         return run.info.run_id
 
