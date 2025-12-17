@@ -96,6 +96,25 @@ def train_model(cfg, experiment_name="Rational_Drone_Pipeline", parent_run_id=No
         print(f"feat ({cfg.feature_type}) Test...")
         X_test_vec = extract_features(X_test_raw, cfg)
         
+        # 5b. NaN Cleaning (Crucial step added)
+        # Check for NaNs/Infs in features (if any slipped through extract_features or 2D extraction)
+        if np.isnan(X_train_vec).any() or np.isinf(X_train_vec).any():
+            print("⚠️ NaNs/Infs detected in Training Data! Cleaning...")
+            mask = ~np.isnan(X_train_vec).any(axis=tuple(range(1, X_train_vec.ndim))) & \
+                   ~np.isinf(X_train_vec).any(axis=tuple(range(1, X_train_vec.ndim)))
+            print(f"   Dropping {len(X_train_vec) - mask.sum()} corrupted samples.")
+            X_train_vec = X_train_vec[mask]
+            y_train_aug = y_train_aug[mask]
+
+        if np.isnan(X_test_vec).any() or np.isinf(X_test_vec).any():
+             print("⚠️ NaNs/Infs detected in Test Data! Cleaning...")
+             mask = ~np.isnan(X_test_vec).any(axis=tuple(range(1, X_test_vec.ndim))) & \
+                    ~np.isinf(X_test_vec).any(axis=tuple(range(1, X_test_vec.ndim)))
+             X_test_vec = X_test_vec[mask]
+             y_test_raw = y_test_raw[mask] # Note: y_test_raw matches X_test_raw indices, hope extract_features didn't shuffle
+             # Actually extract_features output matches input list order.
+             # So this masking aligns X_test_vec and y_test_raw correctly.
+
         # 6. Scaling
         # Skip scaling for 3D data (DL models have internal BatchNorm)
         # OR Flatten -> Scale -> Reshape
