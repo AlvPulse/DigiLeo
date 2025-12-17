@@ -19,7 +19,7 @@ class ExperimentConfig:
         'class1': './EvalDatasets/AudioDD'
     })
 
-    max_raw_samples: int = 3e4     # Limit per class per source (or total, depending on logic)
+    max_raw_samples: int = 5e4     # Limit per class per source (or total, depending on logic)
     max_chunks_per_file: int = 10   # Prevent one file from dominating
     min_audio_len: int = 16000      # Drop raw files shorter than this (samples)
     test_size: float = 0.1
@@ -70,7 +70,7 @@ class ExperimentConfig:
         'svm_C': [0.1, 1.0],
         'cnn_lr': [0.001, 0.0001]
     })
-    model_type: str = "cnn"  # Change this to 'rf', 'svm', 'cnn', 'log_reg'
+    model_type: str = "svm"  # Change this to 'rf', 'svm', 'cnn', 'log_reg','sara_cnn', 'lstm'
     # Leave this EMPTY. It will be auto-filled by __post_init__
     model_params: Dict[str, Any] = field(default_factory=dict)
 
@@ -115,7 +115,7 @@ class ExperimentConfig:
             }
 
         # --- DEEP MODELS (PyTorch) ---
-        elif m_type in ['cnn', 'dnn']:
+        elif m_type in ['cnn', 'dnn','lstm','sara_cnn']:
             return {
                 # Wrapper / Training Params
                 'epochs': 20,

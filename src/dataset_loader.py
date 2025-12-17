@@ -57,7 +57,7 @@ def load_raw_dataset(config):
 
                         # Sub-sample chunks from this file to avoid "one file dominates"
                         # e.g. Max 20 chunks per file
-                        if len(new_chunks) > config.max_chunks_per_file:
+                        if (len(new_chunks) > config.max_chunks_per_file and label ==0 ):
                             new_chunks = random.sample(new_chunks, config.max_chunks_per_file)
 
                         # Add to lists
@@ -92,7 +92,7 @@ def load_raw_dataset(config):
 
                         new_chunks = _process_and_get_chunks(audio, config)
 
-                        if len(new_chunks) > config.max_chunks_per_file:
+                        if (len(new_chunks) > config.max_chunks_per_file and label==0):
                             new_chunks = random.sample(new_chunks, config.max_chunks_per_file)
 
                         for chunk in new_chunks:
