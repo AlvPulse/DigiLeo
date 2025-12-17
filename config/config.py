@@ -47,6 +47,13 @@ class ExperimentConfig:
     n_mels: int = 20                 # User requested 20 dimensions for FBE
     fmax: int = 8000
     
+    # PCEN Params (Per-Channel Energy Normalization)
+    # Defaults suited for speech/event detection in noise
+    pcen_gain: float = 0.98
+    pcen_bias: float = 2.0
+    pcen_power: float = 0.5
+    pcen_time_constant: float = 0.400
+
     normalize_audio: bool = True
     
     # --- 5. MODEL PARAMETERS ---

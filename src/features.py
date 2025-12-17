@@ -34,8 +34,28 @@ def extract_features(X, config):
             ft = librosa.feature.mfcc(y=x, sr=config.sr, n_mfcc=config.n_mfcc)
             if config.drop_first_coeff:
                 ft = ft[1:]
+
+        elif config.feature_type == 'pcen':
+            # --- PCEN (Per-Channel Energy Normalization) ---
+            # 1. Compute Mel-Spectrogram (Raw power, NOT dB)
+            S = librosa.feature.melspectrogram(
+                y=x, sr=config.sr,
+                n_mels=config.n_mels,
+                fmax=config.fmax,
+                power=1 # PCEN often works well with magnitude (power=1) or power=2
+            )
+            # 2. Apply PCEN
+            ft = librosa.pcen(
+                S * (2**31), # Scale up if audio is float32 [-1, 1] to avoid tiny values
+                sr=config.sr,
+                gain=config.pcen_gain,
+                bias=config.pcen_bias,
+                power=config.pcen_power,
+                time_constant=config.pcen_time_constant
+            )
+
         else:
-            # --- MEL SPECTROGRAM ---
+            # --- MEL SPECTROGRAM (dB) ---
             ft = librosa.feature.melspectrogram(
                 y=x, sr=config.sr, 
                 n_mels=config.n_mels, 

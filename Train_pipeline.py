@@ -64,15 +64,21 @@ def train_model(cfg, experiment_name="Rational_Drone_Pipeline", parent_run_id=No
         # 5. Feature Extraction & Smart Configuration
         # Apply specific settings based on model family
         classical_models = ['rf', 'svm', 'log_reg', 'ensemble']
-        dl_models = ['cnn', 'dnn', 'lstm', 'sara_cnn']
+        dl_models = ['cnn', 'dnn', 'lstm', 'sara_cnn', 'crnn']
 
         if cfg.model_type in dl_models:
              # Deep Learning: Force FBE (Mel) and 2D Input
              # User requested FBE (Mel) for DL, MFCC for others.
              print(f"🧠 Deep Learning Model ({cfg.model_type}) detected.")
-             print("   -> Switching to Mel-Spectrogram (FBE) features (n_mels={cfg.n_mels}).")
+
+             # Smart Feature Selection
+             if cfg.feature_type == 'pcen':
+                 print(f"   -> Using PCEN features (n_mels={cfg.n_mels}).")
+             else:
+                 print(f"   -> Switching to Mel-Spectrogram (FBE) features (n_mels={cfg.n_mels}).")
+                 cfg.feature_type = 'mel'
+
              print("   -> Enabling 2D Feature return.")
-             cfg.feature_type = 'mel'
              cfg.return_2d_features = True
 
         elif cfg.model_type in classical_models:

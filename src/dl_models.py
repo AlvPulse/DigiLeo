@@ -150,6 +150,75 @@ class AudioLSTM(nn.Module):
         logits = self.fc(last_out)
         return logits
 
+class AudioCRNN(nn.Module):
+    """
+    CRNN: Convolutional Recurrent Neural Network.
+    CNN features -> GRU -> Classifier.
+    """
+    def __init__(self, n_features, n_timesteps, n_classes=2, hidden_size=64):
+        super(AudioCRNN, self).__init__()
+
+        # 1. CNN Block (Feature Extraction)
+        # Input: (Batch, 1, n_features, n_timesteps)
+        # We assume n_features (freq bins) is Height, n_timesteps is Width
+        self.conv_blocks = nn.Sequential(
+            nn.Conv2d(1, 16, kernel_size=(3, 3), padding=1),
+            nn.BatchNorm2d(16),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=(2, 2)), # Reduces F and T by 2
+
+            nn.Conv2d(16, 32, kernel_size=(3, 3), padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=(2, 2)), # Reduces F and T by 2
+
+            nn.Dropout(0.3)
+        )
+
+        # Calculate Output Height (Freq dimension) after pooling
+        # 2 pools -> H / 4
+        h_out = n_features // 4
+        if h_out < 1: h_out = 1 # Safety
+
+        # The output of Conv block will be (Batch, Channels=32, H_out, W_out)
+        # For RNN, we want (Batch, SeqLen=W_out, InputSize=Channels*H_out)
+        self.gru_input_size = 32 * h_out
+
+        # 2. RNN Block (Temporal Dynamics)
+        self.gru = nn.GRU(
+            input_size=self.gru_input_size,
+            hidden_size=hidden_size,
+            num_layers=1,
+            batch_first=True,
+            bidirectional=False
+        )
+
+        # 3. Classifier
+        self.fc = nn.Linear(hidden_size, n_classes)
+
+    def forward(self, x):
+        # x: (Batch, Features, Time) -> (Batch, 1, Features, Time)
+        if x.dim() == 3:
+            x = x.unsqueeze(1)
+
+        # CNN
+        x = self.conv_blocks(x)
+        # Shape: (Batch, C, H, W)
+
+        # Prepare for GRU: Permute to (Batch, W, C, H) -> Flatten C*H
+        b, c, h, w = x.size()
+        x = x.permute(0, 3, 1, 2).contiguous() # (B, W, C, H)
+        x = x.view(b, w, -1) # (B, W, C*H)
+
+        # GRU
+        # out: (Batch, SeqLen, Hidden)
+        out, _ = self.gru(x)
+
+        # Take last time step
+        last_out = out[:, -1, :]
+
+        return self.fc(last_out)
+
 class SaraCNN(nn.Module):
     """
     Port of Sara Al-Emadi's CNN.
