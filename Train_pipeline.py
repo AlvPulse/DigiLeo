@@ -38,13 +38,6 @@ def train_model(cfg, experiment_name="Rational_Drone_Pipeline", parent_run_id=No
         print(f"\n🚀 Starting Run: {run.info.run_id}")
         mlflow.log_params(cfg.to_dict())
         
-        # 1. Save Config as Artifact (Crucial for Evaluation.py)
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as tmp:
-            json.dump(cfg.to_dict(), tmp, indent=4)
-            tmp_path = tmp.name
-        mlflow.log_artifact(tmp_path, artifact_path="config")
-        os.remove(tmp_path)
-        
         # 2. Load Raw Data
         X_raw, y_raw = load_raw_dataset(cfg)
         
@@ -89,6 +82,14 @@ def train_model(cfg, experiment_name="Rational_Drone_Pipeline", parent_run_id=No
                  print("   -> Switching to MFCC features (standard for RF/SVM).")
                  cfg.feature_type = 'mfcc'
              cfg.return_2d_features = False
+
+        # 1. Save Config as Artifact (Crucial for Evaluation.py)
+        # We save it HERE, after Smart Configuration has potentially modified it.
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as tmp:
+            json.dump(cfg.to_dict(), tmp, indent=4)
+            tmp_path = tmp.name
+        mlflow.log_artifact(tmp_path, artifact_path="config")
+        os.remove(tmp_path)
 
         print(f"feat ({cfg.feature_type}) Train...")
         X_train_vec = extract_features(X_train_aug, cfg)
