@@ -273,9 +273,14 @@ class PyTorchClassifier(BaseEstimator, ClassifierMixin):
             # If still missing (e.g. because X was 2D but model needs 3D dims),
             # we try to inject defaults or raise a clearer error.
             if 'n_features' in valid_keys and 'n_features' not in filtered_params:
-                 # Fallback: maybe we received flattened 2D input for a 3D model?
-                 # This is a bit of a hack, but helps debugging.
-                 pass
+                # Check if 'n_features' is mandatory (no default value)
+                param = sig.parameters['n_features']
+                if param.default == inspect.Parameter.empty:
+                    raise ValueError(
+                        f"Model {self.model_class.__name__} requires 'n_features', but it was not provided "
+                        f"and could not be inferred from input shape {X.shape}. "
+                        "Please provide 'n_features' (and 'n_timesteps') in 'model_params' or ensure input is 3D."
+                    )
 
             self.model = self.model_class(**filtered_params).to(self.device)
         
