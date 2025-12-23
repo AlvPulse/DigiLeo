@@ -355,10 +355,15 @@ class PyTorchClassifier(BaseEstimator, ClassifierMixin):
         
         pos_weight = torch.tensor([2.0]).to(self.device) 
 
+
         # Use BCEWithLogitsLoss for binary classification (Standard for 2-class DL)
         # It's more stable than CrossEntropy for binary problems
-        criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+        
         #criterion = nn.CrossEntropyLoss()
+        # Robust Loss Function: Standard Cross Entropy (Works for N-class classification)
+        # Avoids shape mismatch issues with BCEWithLogitsLoss
+        criterion = nn.CrossEntropyLoss()
+
         optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
 
         # Prepare Data
